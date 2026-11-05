@@ -12,7 +12,7 @@ jobs:
         with: { node-version: 20 }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
-      - uses:  run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+      - run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || tru
       - run: npm install
       - run: npx cap add android
       - run: pip install pillow && python tools/icons.py
