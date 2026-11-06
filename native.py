@@ -24,6 +24,8 @@ perms = [
     '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />',
     '<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />',
     '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+    '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
+    '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />',
 ]
 block = ""
 for p in perms:
@@ -42,5 +44,7 @@ if "LunaListener" not in x:
            '                <action android:name="android.service.notification.NotificationListenerService" />\n'
            '            </intent-filter>\n        </service>\n')
     x = x.replace("</application>", svc + "    </application>", 1)
+if "LunaPlayService" not in x:
+    x = x.replace("</application>", '        <service android:name=".LunaPlayService" android:exported="false" android:foregroundServiceType="mediaPlayback" />\n    </application>', 1)
 mf.write_text(x)
 print("manifest patched")

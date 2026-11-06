@@ -470,7 +470,7 @@ async function renderNative() {
   $("#native-box").classList.toggle("hidden", !N.isNative); if (!N.isNative) return;
   const st = await N.refreshStatus(), set = (id, ok, yes, no, btn) => { $("#p-" + id).textContent = ok ? yes : no; const b = $("#p-" + id + "b"); if (b) b.classList.toggle("hidden", ok && !btn); };
   $("#p-audio").textContent = st.audio ? "Allowed. Tap Scan phone to add your songs." : "Allow it when asked, then Luna finds your songs.";
-  set("mic", st.mic, "Allowed", "Needed for the mic button"); set("listener", st.listener, "On. Luna dances to Spotify, YouTube and more.", "Off. Opens a settings page, switch Luna on there.");
+  set("mic", st.mic, "Allowed", "Needed for the mic button"); set("listener", st.listener, "On. Luna dances to Spotify, YouTube and more.", "Off. Opens a settings page, switch Luna on there. Samsung: if it is greyed out, go to Settings > Apps > Luna > ⋮ (top right) > Allow restricted settings, then try again.");
   set("overlay", st.overlay, "Allowed", "Needed to float over other apps"); $("#s-island").checked = !!st.island;
 }
 $("#p-micb").onclick = async () => { await N.askMic(); renderNative(); };
@@ -566,8 +566,15 @@ function loop() {
 // ------------------------------------------------------------------ start
 (async function init() {
   applyLook(); pushArt(); go("room"); renderNotes(); refreshPlayerUI(); $("#now-vol").value = player.volume * 100;
-  await player.load(); refreshPlayerUI();
+  await player.load(); player.restoreResume(); refreshPlayerUI();
   logMsg("luna", `Hi${cfg.get("name", "") ? " " + cfg.get("name", "") : ""}! I'm Luna. ${player.songs.length ? "Tap a song and I'll dance to it." : "Add some songs from your phone in the Library tab and I'll dance to them."} Type 'help' to see what I can do.`);
+  if (N.isNative) {
+    N.onControl(act => { if (act === "next") player.next(); else if (act === "prev") player.prev(); else if (act === "pause") player.pause(); else if (act === "play") player.resume(); else player.toggle(); });
+    let lastNow = "";
+    player.addEventListener("change", () => { const s = player.current, p = !!(s && player.playing && !player.audio.paused), k = (s ? s.id : "") + p; if (k === lastNow) return; lastNow = k; N.setNow(s ? (s.title || s.name) : "", s ? s.artist : "", p); });
+    player.audio.addEventListener("pause", () => player.dispatchEvent(new Event("change")));
+    N.askAllOnce(kv).then(() => { if (!kv.get("tipped", false)) { kv.set("tipped", true); toast("Open Settings > Phone powers to finish: Notification access and Display over other apps"); } });
+  }
   if (cfg.get("city", "")) fetchWeather(cfg.get("city", ""), false);
   if ("serviceWorker" in navigator) { try { navigator.serviceWorker.register("sw.js").catch(() => { }); } catch (e) { } }
   if (window.__lunaTest) window.__luna = { beh, player, scene, runCommand, go, wearPreset, B };

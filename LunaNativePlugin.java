@@ -36,7 +36,8 @@ import java.util.ArrayList;
     permissions = {
         @Permission(alias = "audio33", strings = { Manifest.permission.READ_MEDIA_AUDIO }),
         @Permission(alias = "audioOld", strings = { Manifest.permission.READ_EXTERNAL_STORAGE }),
-        @Permission(alias = "mic", strings = { Manifest.permission.RECORD_AUDIO })
+        @Permission(alias = "mic", strings = { Manifest.permission.RECORD_AUDIO }),
+        @Permission(alias = "notif", strings = { "android.permission.POST_NOTIFICATIONS" })
     }
 )
 public class LunaNativePlugin extends Plugin {
@@ -47,15 +48,17 @@ public class LunaNativePlugin extends Plugin {
     @Override
     public void load() {
         inst = this;
+        Island.init(getContext());
+        Island.reloadArt();
         LunaListener l = LunaListener.instance;
         if (l != null) l.republish();
     }
 
     @Override
-    protected void handleOnResume() { foreground = true; LunaListener.refreshOverlay(); }
+    protected void handleOnResume() { foreground = true; Island.foreground = true; Island.update(); }
 
     @Override
-    protected void handleOnPause() { foreground = false; LunaListener.refreshOverlay(); }
+    protected void handleOnPause() { foreground = false; Island.foreground = false; Island.update(); }
 
     static void emit(String name, JSObject data) {
         if (inst != null) inst.notifyListeners(name, data);
@@ -73,11 +76,45 @@ public class LunaNativePlugin extends Plugin {
         JSObject r = new JSObject();
         r.put("listener", listenerOn());
         r.put("overlay", Settings.canDrawOverlays(getContext()));
+        r.put("notif", notifOk());
         r.put("mic", getPermissionState("mic") == com.getcapacitor.PermissionState.GRANTED);
         r.put("audio", getPermissionState(audioAlias()) == com.getcapacitor.PermissionState.GRANTED);
         r.put("island", prefs().getBoolean("island", false));
         r.put("pkg", getContext().getPackageName());
         call.resolve(r);
+    }
+
+    private boolean notifOk() { return Build.VERSION.SDK_INT < 33 || getPermissionState("notif") == com.getcapacitor.PermissionState.GRANTED; }
+
+    @PluginMethod
+    public void requestAudio(PluginCall call) {
+        if (getPermissionState(audioAlias()) == com.getcapacitor.PermissionState.GRANTED) { call.resolve(); return; }
+        requestPermissionForAlias(audioAlias(), call, "plainDone");
+    }
+
+    @PluginMethod
+    public void requestNotif(PluginCall call) {
+        if (notifOk()) { call.resolve(); return; }
+        requestPermissionForAlias("notif", call, "plainDone");
+    }
+
+    @PermissionCallback
+    private void plainDone(PluginCall call) { call.resolve(); }
+
+    /** The app tells us what Luna herself is playing, for the notification and the island. */
+    @PluginMethod
+    public void setNow(PluginCall call) {
+        Island.ownTitle = call.getString("title", "");
+        Island.ownArtist = call.getString("artist", "");
+        Island.ownPlaying = Boolean.TRUE.equals(call.getBoolean("playing", false));
+        Island.update();
+        Context c = getContext();
+        try {
+            Intent i = new Intent(c, LunaPlayService.class);
+            if (Island.ownPlaying && Build.VERSION.SDK_INT >= 26) c.startForegroundService(i);
+            else if (Island.ownPlaying || !Island.ownTitle.isEmpty()) c.startService(i);
+        } catch (Exception ignored) { }
+        call.resolve();
     }
 
     SharedPreferences prefs() { return getContext().getSharedPreferences("luna", Context.MODE_PRIVATE); }
@@ -156,7 +193,7 @@ public class LunaNativePlugin extends Plugin {
     public void setIsland(PluginCall call) {
         boolean on = Boolean.TRUE.equals(call.getBoolean("enabled", false));
         prefs().edit().putBoolean("island", on).apply();
-        LunaListener.refreshOverlay();
+        Island.update();
         call.resolve();
     }
 
@@ -165,7 +202,7 @@ public class LunaNativePlugin extends Plugin {
         try {
             save("idle.png", call.getString("idle"));
             save("sing.png", call.getString("sing"));
-            LunaListener.reloadArt();
+            Island.reloadArt();
         } catch (Exception ignored) { }
         call.resolve();
     }
@@ -181,7 +218,7 @@ public class LunaNativePlugin extends Plugin {
 
     @PluginMethod
     public void control(PluginCall call) {
-        LunaListener.control(call.getString("action", ""));
+        Island.control(call.getString("action", ""));
         call.resolve();
     }
 
