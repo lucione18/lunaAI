@@ -9,7 +9,7 @@ let activeController = null;
 
 // IMPORTANT: Replace this with your actual Cloudflare Worker URL.
 const KOKORO_URL =
-  "https://luna-voice-api.YOUR-SUBDOMAIN.workers.dev";
+  "https://luna-voice-api.mashishithato1.workers.dev/";
 
 export function systemVoices() {
   try {
