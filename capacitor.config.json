@@ -1,0 +1,11 @@
+{
+  "appId": "com.luna.music",
+  "appName": "Luna",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#0d0a1e"
+  }
+}
