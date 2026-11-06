@@ -31,7 +31,7 @@ function logMsg(who, text) {
   const d = document.createElement("div"); d.className = "msg " + who; d.textContent = text; const l = $("#log"); l.appendChild(d); l.scrollTop = l.scrollHeight;
   while (l.children.length > 80) l.firstChild.remove();
 }
-let voiceOn = cfg.get("voice", false);
+let voiceOn = cfg.get("voice", N.isNative);
 function luna(text, opts = {}) {
   logMsg("luna", text); say(text, opts.secs || Math.max(4, Math.min(10, text.length / 14)));
   if (voiceOn) V.speak(text, { start: () => beh.speaking = true, end: () => beh.speaking = false, error: m => toast(m) });
@@ -461,9 +461,9 @@ function openSettings() {
   $("#s-elkey").value = cfg.get("el_key", ""); $("#s-elvoice").value = cfg.get("el_voice", ""); renderNative();
   $("#sheet-settings").classList.remove("hidden");
 }
-function fillVoices() {
-  const vs = V.systemVoices(), sel = $("#s-vname"), cur = cfg.get("voice_name", "");
-  sel.innerHTML = `<option value="">Automatic (best available)</option>` + vs.map(v => `<option value="${esc(v.name)}">${esc(v.name)}</option>`).join(""); sel.value = cur;
+async function fillVoices() {
+  const vs = await V.listVoices(), sel = $("#s-vname"), cur = cfg.get("voice_name", "");
+  sel.innerHTML = `<option value="">Automatic (best available)</option>` + vs.map(v => `<option value="${esc(v.name)}">${esc(v.label)}</option>`).join(""); sel.value = cur;
 }
 try { speechSynthesis.onvoiceschanged = () => { if (!$("#sheet-settings").classList.contains("hidden")) fillVoices(); }; } catch (e) { }
 async function renderNative() {

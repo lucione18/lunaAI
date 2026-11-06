@@ -56,3 +56,10 @@ export function listen(onText, onEnd) {
   P.startSpeech().catch(() => onEnd());
   return () => { P.stopSpeech().catch(() => { }); };
 }
+
+// ---- Luna's voice through Android text-to-speech
+export const ttsVoices = async () => { try { return (await P.ttsVoices()).voices || []; } catch (e) { return []; } };
+export const ttsStop = () => { if (isNative) P.ttsStop().catch(() => { }); };
+let ttsCb = null;
+if (isNative) { P.addListener("ttsstart", () => ttsCb && ttsCb.start && ttsCb.start()); P.addListener("ttsend", () => { const c = ttsCb; ttsCb = null; c && c.end && c.end(); }); }
+export const ttsSpeak = (text, voice, rate, pitch, cb) => { ttsCb = cb; P.speak({ text, voice: voice || "", rate, pitch }).catch(() => { ttsCb = null; cb.end(); }); };

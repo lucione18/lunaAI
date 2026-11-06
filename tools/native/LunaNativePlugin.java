@@ -27,6 +27,9 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
+import android.speech.tts.Voice;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
@@ -44,6 +47,78 @@ public class LunaNativePlugin extends Plugin {
     static LunaNativePlugin inst;
     static volatile boolean foreground = true;
     private SpeechRecognizer recognizer;
+    private TextToSpeech tts;
+    private boolean ttsReady = false;
+    private final ArrayList<Runnable> ttsWait = new ArrayList<>();
+
+    // ---- Luna's voice: Android's own text-to-speech (uses the engine chosen in phone settings, e.g. Google)
+    private void withTts(Runnable r) {
+        getActivity().runOnUiThread(() -> {
+            if (ttsReady) { r.run(); return; }
+            ttsWait.add(r);
+            if (tts != null) return;
+            tts = new TextToSpeech(getContext().getApplicationContext(), status -> {
+                if (status == TextToSpeech.SUCCESS) {
+                    ttsReady = true;
+                    try { tts.setLanguage(java.util.Locale.US); } catch (Exception ignored) { }
+                    tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                        @Override public void onStart(String id) { notifyListeners("ttsstart", new JSObject()); }
+                        @Override public void onDone(String id) { notifyListeners("ttsend", new JSObject()); }
+                        @Override public void onError(String id) { notifyListeners("ttsend", new JSObject()); }
+                    });
+                    for (Runnable w : new ArrayList<>(ttsWait)) w.run();
+                } else { tts = null; for (Runnable w : new ArrayList<>(ttsWait)) { } JSObject o = new JSObject(); notifyListeners("ttsend", o); }
+                ttsWait.clear();
+            });
+        });
+    }
+
+    @PluginMethod
+    public void ttsVoices(PluginCall call) {
+        withTts(() -> {
+            JSArray out = new JSArray();
+            try {
+                for (Voice v : tts.getVoices()) {
+                    if (!v.getLocale().getLanguage().equals("en")) continue;
+                    JSObject o = new JSObject();
+                    o.put("name", v.getName());
+                    o.put("lang", v.getLocale().toString());
+                    o.put("network", v.isNetworkConnectionRequired());
+                    o.put("quality", v.getQuality());
+                    out.put(o);
+                }
+            } catch (Exception ignored) { }
+            JSObject r = new JSObject();
+            r.put("voices", out);
+            call.resolve(r);
+        });
+    }
+
+    @PluginMethod
+    public void speak(PluginCall call) {
+        final String text = call.getString("text", "");
+        final String voice = call.getString("voice", "");
+        final float rate = call.getFloat("rate", 1.0f);
+        final float pitch = call.getFloat("pitch", 1.1f);
+        withTts(() -> {
+            try {
+                if (voice != null && !voice.isEmpty()) {
+                    for (Voice v : tts.getVoices()) if (v.getName().equals(voice)) { tts.setVoice(v); break; }
+                }
+                tts.setSpeechRate(rate);
+                tts.setPitch(pitch);
+                int r = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "luna");
+                if (r != TextToSpeech.SUCCESS) notifyListeners("ttsend", new JSObject());
+            } catch (Exception e) { notifyListeners("ttsend", new JSObject()); }
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
+    public void ttsStop(PluginCall call) {
+        getActivity().runOnUiThread(() -> { if (tts != null && ttsReady) tts.stop(); });
+        call.resolve();
+    }
 
     @Override
     public void load() {

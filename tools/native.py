@@ -35,7 +35,7 @@ for p in perms:
 queries = ""
 if "<queries>" not in x:
     queries = ('    <queries>\n        <intent>\n            <action android:name="android.speech.RecognitionService" />\n'
-               '        </intent>\n    </queries>\n')
+               '        </intent>\n        <intent>\n            <action android:name="android.intent.action.TTS_SERVICE" />\n        </intent>\n    </queries>\n')
 x = x.replace("<application", block + queries + "    <application", 1)
 if "LunaListener" not in x:
     svc = ('        <service android:name=".LunaListener" android:exported="true" android:label="Luna"\n'

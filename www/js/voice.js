@@ -1,12 +1,18 @@
 // voice.js - Luna's voice: the phone's voices (pick a natural one) or ElevenLabs for a much more human sound
 import { kv } from "./store.js";
+import * as N from "./native.js";
 let audioEl = null;
 export function systemVoices() {
   try { return (speechSynthesis.getVoices() || []).filter(v => /^en/i.test(v.lang)).sort((a, b) => score(b) - score(a)); } catch (e) { return []; }
 }
 const score = v => (/network|neural|natural|online|enhanced/i.test(v.name) ? 4 : 0) + (/female|woman|girl|aria|jenny|samantha|zira|sonia|libby|emma|-f-|#female|x-tpf|x-iol/i.test(v.name) ? 2 : 0) + (v.localService ? 0 : 1);
-export function stop() { try { speechSynthesis.cancel(); } catch (e) { } if (audioEl) { audioEl.pause(); audioEl = null; } }
+export async function listVoices() {
+  if (N.isNative) { const vs = await N.ttsVoices(); return vs.sort((a, b) => (b.network - a.network) || (b.quality - a.quality)).map(x => ({ name: x.name, label: x.name.replace(/^en-/i, "").replace(/-/g, " ") + (x.network ? " (online, natural)" : "") })); }
+  return systemVoices().map(x => ({ name: x.name, label: x.name }));
+}
+export function stop() { if (N.isNative) N.ttsStop(); try { speechSynthesis.cancel(); } catch (e) { } if (audioEl) { audioEl.pause(); audioEl = null; } }
 function systemSpeak(text, cb) {
+  if (N.isNative) return N.ttsSpeak(text, kv.get("voice_name", ""), +kv.get("voice_rate", 1.0), +kv.get("voice_pitch", 1.1), cb);
   if (!("speechSynthesis" in window)) return cb.end();
   try {
     speechSynthesis.cancel();
