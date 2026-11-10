@@ -33,6 +33,7 @@ export const SceneRoom = {
     PAL.floor = th.floor; PAL.floor_l = th.floor_l;
     const wall = (s.mood === "idle" || s.mood === "paused") ? mix(s.bg, th.wall, 0.5) : s.bg;
     p.fill(wall);
+    this.bulbGlow(s, wall);
     const rim = mix(s.glow, "#000000", 0.35), gr = s.v * 3;
     const gx = g(s, "pose") !== "bed" ? s.cx : CENTER;
     p.ell(gx, 54, 40 + gr, 36 + gr, rim);
@@ -48,10 +49,16 @@ export const SceneRoom = {
     p.rect(0, 90, GW, GH, PAL.floor);
     p.rect(0, 90, GW, 91, PAL.floor_l);
     this.decorations(s);
+    this.roomExtras(s);
   },
   decorations(s) {
-    const p = this.p, t = s.t, se = g(s, "season", null);
-    if (!se) return;
+    const keys = new Set([g(s, "season", null), ...(s.decor || []).map(d => ({ "christmas tree": "christmas", halloween: "halloween", hearts: "valentine" }[d] || d))]);
+    keys.delete(null);
+    for (const k of keys) if (["easter", "party", "birthday", "diwali"].includes(k)) this.decorExtra(s, k);
+    for (const se of keys) this.seasonDecor(s, se);
+  },
+  seasonDecor(s, se) {
+    const p = this.p, t = s.t;
     if (se === "christmas") {
       for (let x = 6; x < GW; x += 9) {
         const y = 3 + 2.2 * sin(x * 0.16), col = ["#ff4f6d", "#4fe08a", "#ffe66b", "#6be3ff"][Math.floor(x / 9) % 4];

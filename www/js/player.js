@@ -2,6 +2,7 @@
 import { kv, songDB } from "./store.js";
 import { readTags } from "./tags.js";
 import { classify, genreMood } from "./behavior.js";
+import * as N from "./native.js";
 
 export class BeatTracker {
   constructor() { this.reset(); }
@@ -71,11 +72,16 @@ export class Player extends EventTarget {
     const q = (r.queue || []).filter(id => this.byId.has(id)); const qi = q.indexOf(r.id); if (qi < 0) return false;
     this.queue = q; this.qi = qi; this.baseQueue = (r.base || q).filter(id => this.byId.has(id)); this.queueName = r.name || "Now playing";
     const s = this.current; this.tagMood = genreMood(s.genre);
-    let u = this.urls.get(s.id) || {}; if (!u.audio) { u.audio = URL.createObjectURL(s.blob); this.urls.set(s.id, u); }
-    this.audio.src = u.audio; const t = r.t || 0;
+    this.audio.src = this.audioUrl(s); const t = r.t || 0;
     this.audio.addEventListener("loadedmetadata", () => { try { this.audio.currentTime = Math.min(t, (this.audio.duration || t) - 0.5); } catch (e) { } }, { once: true });
     this.playing = true; this.paused = true; this.listenId = s.id; this.listenT = 0; this._lt = t;
     this.emit(); return true;
+  }
+  // songs from the phone are played straight from where they are (no copy); only picked files are stored in the app
+  audioUrl(s) {
+    let u = this.urls.get(s.id) || {};
+    if (!u.audio) { u.audio = s.uri && N.isNative ? N.urlFor(s.uri) : URL.createObjectURL(s.blob); this.urls.set(s.id, u); }
+    return u.audio;
   }
   get current() { return this.queue[this.qi] !== undefined ? this.byId.get(this.queue[this.qi]) : null; }
   async load() {
@@ -85,10 +91,10 @@ export class Player extends EventTarget {
   }
   addRecord(r) {
     const t = { id: r.id, name: r.name, ...r.meta, hasCover: !!r.cover };
-    t.blob = r.blob; t.cover = r.cover; this.songs.push(t); this.byId.set(t.id, t);
+    t.blob = r.blob; t.uri = r.uri || ""; t.cover = r.cover; this.songs.push(t); this.byId.set(t.id, t);
   }
   sortSongs() { this.songs.sort((a, b) => a.title.localeCompare(b.title)); }
-  async addFiles(files, progress, quiet = false) {
+  async addFiles(files, progress, quiet = false, uris = null) {
     let n = 0, dup = 0;
     const have = new Set(this.songs.map(s => s.name + "|" + s.size));
     for (const f of files) {
@@ -98,7 +104,7 @@ export class Player extends EventTarget {
       const meta = await readTags(f); const cover = meta.cover; delete meta.cover;
       meta.size = f.size; meta.dur = 0;
       const id = "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      const rec = { id, name: f.name, blob: f, cover, meta }; await songDB.put(rec); this.addRecord(rec); have.add(f.name + "|" + f.size);
+      const uri = uris && uris.get(f); const rec = { id, name: f.name, blob: uri ? null : f, uri: uri || "", cover, meta }; await songDB.put(rec); this.addRecord(rec); have.add(f.name + "|" + f.size);
       if (n % 5 === 0 && !quiet) await new Promise(r => setTimeout(r, 0));
     }
     if (!quiet) { this.sortSongs(); this.emit(); this.fillDurations(); }
@@ -108,13 +114,24 @@ export class Player extends EventTarget {
     for (const s of this.songs) {
       if (s.dur) continue;
       await new Promise(res => {
-        const a = new Audio(), u = URL.createObjectURL(s.blob); a.preload = "metadata";
-        const done = () => { s.dur = isFinite(a.duration) ? a.duration : 0; URL.revokeObjectURL(u); res(); };
+        const a = new Audio(), own = !(s.uri && N.isNative), u = own ? URL.createObjectURL(s.blob) : N.urlFor(s.uri); a.preload = "metadata";
+        const done = () => { s.dur = isFinite(a.duration) ? a.duration : 0; if (own) URL.revokeObjectURL(u); res(); };
         a.onloadedmetadata = done; a.onerror = done; setTimeout(done, 4000); a.src = u;
       });
-      songDB.put({ id: s.id, name: s.name, blob: s.blob, cover: s.cover, meta: this.metaOf(s) });
+      songDB.put({ id: s.id, name: s.name, blob: s.blob, uri: s.uri || "", cover: s.cover, meta: this.metaOf(s) });
     }
     this.emit();
+  }
+  // how much space the app uses for copied songs, and turning copies into references (frees the space)
+  copiedBytes() { return this.songs.reduce((a, s) => a + (s.blob ? (s.size || s.blob.size || 0) : 0), 0); }
+  async slim(list) {
+    const map = new Map(list.map(x => [x.name + "|" + x.size, x.uri])); let freed = 0, n = 0;
+    for (const s of this.songs) {
+      if (!s.blob) continue; const uri = map.get(s.name + "|" + (s.size || s.blob.size)); if (!uri) continue;
+      freed += s.size || s.blob.size || 0; n++; s.uri = uri; s.blob = null; const u = this.urls.get(s.id); if (u && u.audio && u.audio.startsWith("blob:")) { try { URL.revokeObjectURL(u.audio); } catch (e) { } this.urls.delete(s.id); }
+      await songDB.put({ id: s.id, name: s.name, blob: null, uri, cover: s.cover, meta: this.metaOf(s) });
+    }
+    this.emit(); return { freed, n };
   }
   metaOf(s) { const { title, artist, album, genre, year, track, dur, size, lyrics } = s; return { title, artist, album, genre, year, track, dur, size, lyrics }; }
   async remove(id) { await songDB.del(id); this.songs = this.songs.filter(s => s.id !== id); this.byId.delete(id); const u = this.urls.get(id); if (u) { URL.revokeObjectURL(u.cover); this.urls.delete(id); } this.emit(); }
@@ -142,8 +159,7 @@ export class Player extends EventTarget {
   async startCurrent() {
     const s = this.current; if (!s) return;
     this.ensureAudioGraph(); this.tracker.reset(); this.tagMood = genreMood(s.genre);
-    let u = this.urls.get(s.id); if (!u || !u.audio) { u = u || {}; u.audio = URL.createObjectURL(s.blob); this.urls.set(s.id, u); }
-    this.audio.src = u.audio; this.playing = true; this.paused = false; this.listenId = s.id; this.listenT = 0;
+    this.audio.src = this.audioUrl(s); this.playing = true; this.paused = false; this.listenId = s.id; this.listenT = 0;
     this.stats[s.id] = this.stats[s.id] || { plays: 0, secs: 0, last: 0 }; this.stats[s.id].plays++; this.stats[s.id].last = Date.now();
     this.recent = [s.id, ...this.recent.filter(x => x !== s.id)].slice(0, 50); kv.set("recent", this.recent); kv.set("stats", this.stats);
     try { await this.audio.play(); } catch (e) { this.paused = true; }

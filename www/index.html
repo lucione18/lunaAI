@@ -93,32 +93,68 @@
 
   <div id="sheet-settings" class="sheet hidden"><div class="sheet-body pad">
     <div class="sheet-top"><div class="title big">Settings</div><button class="icon" id="set-close" aria-label="Close"></button></div>
-    <label>Your name<input id="s-name" placeholder="What should I call you?"></label>
-    <label>City (for weather)<input id="s-city" placeholder="e.g. Johannesburg"></label>
-    <label>Hemisphere<select id="s-hemi"><option value="south">Southern</option><option value="north">Northern</option></select></label>
-    <label>Room theme<select id="s-theme"></select></label>
-    <label class="check"><input type="checkbox" id="s-season"> Seasons and holidays change her room and outfit</label>
-    <label class="check"><input type="checkbox" id="s-voice"> Luna reads her replies out loud</label>
-    <div class="two"><label>Bedtime hour<input id="s-bed" type="number" min="0" max="23"></label><label>Wake hour<input id="s-wake" type="number" min="0" max="23"></label></div>
-    <label>Claude API key (optional, to chat about anything)<input id="s-key" type="password" placeholder="sk-ant-..." autocomplete="off"></label>
-    <div class="sub dim">The key stays on this phone and is only sent to Anthropic.</div>
-    <div class="h2">Luna's voice</div>
-    <label>Voice engine<select id="s-vengine"><option value="system">Phone voice</option><option value="eleven">ElevenLabs (most realistic)</option></select></label>
-    <label>Phone voice<select id="s-vname"></select></label>
-    <div class="two"><label>Speed<input id="s-vrate" type="range" min="70" max="130"></label><label>Pitch<input id="s-vpitch" type="range" min="80" max="170"></label></div>
-    <label>ElevenLabs key (optional)<input id="s-elkey" type="password" placeholder="paste key" autocomplete="off"></label>
-    <label>ElevenLabs voice ID (optional)<input id="s-elvoice" placeholder="leave empty for the default voice" autocomplete="off"></label>
-    <div class="row"><button class="pill ghost" id="v-test" type="button">Hear Luna</button></div>
+
+    <details class="sgrp" open><summary>You</summary>
+      <label>Your name<input id="s-name" placeholder="What should I call you?"></label>
+      <label>City (for weather)<input id="s-city" placeholder="e.g. Johannesburg"></label>
+      <label>Hemisphere<select id="s-hemi"><option value="south">Southern</option><option value="north">Northern</option></select></label>
+    </details>
+
+    <details class="sgrp"><summary>Appearance</summary>
+      <label>App colour<select id="s-accent-mode"><option value="default">Luna pink (default)</option><option value="outfit">Match Luna's outfit</option><option value="fav">My favourite colour</option></select></label>
+      <label>My favourite colour<div class="swatches" id="s-swatches"></div></label>
+      <label>Room theme<select id="s-theme"></select></label>
+      <label class="check"><input type="checkbox" id="s-season"> Seasons and holidays change her room and outfit</label>
+    </details>
+
+    <details class="sgrp"><summary>Luna</summary>
+      <div class="two"><label>Bedtime hour<input id="s-bed" type="number" min="0" max="23"></label><label>Wake hour<input id="s-wake" type="number" min="0" max="23"></label></div>
+      <label class="check"><input type="checkbox" id="s-fun"> Rare surprises (she sometimes sings, yawns or sends stickers)</label>
+      <label class="check"><input type="checkbox" id="s-talk"> Luna talks on her own sometimes</label>
+    </details>
+
+    <details class="sgrp"><summary>Music</summary>
+      <label>Sleep timer<select id="s-sleep"><option value="0">Off</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">90 minutes</option></select></label>
+      <label class="check"><input type="checkbox" id="s-resume"> Continue where I stopped when I open Luna</label>
+      <label>Lyrics animation<select id="s-lyrstyle"><option value="karaoke">Karaoke fill</option><option value="glow">Glow</option><option value="bounce">Bounce</option><option value="wave">Wave</option><option value="fade">Soft fade</option><option value="none">None</option></select></label>
+      <label>Lyrics size<input id="s-lyrsize" type="range" min="14" max="30"></label>
+    </details>
+
+    <details class="sgrp"><summary>Luna's voice</summary>
+      <label class="check"><input type="checkbox" id="s-voice"> Luna reads her replies out loud</label>
+      <label>Voice<select id="s-vname"></select></label>
+      <div class="two"><label>Speed<input id="s-vrate" type="range" min="70" max="130"></label><label>Pitch<input id="s-vpitch" type="range" min="80" max="170"></label></div>
+      <div class="sub dim">Tip: on Samsung phones set the text-to-speech engine to Google, then pick a "network" voice here.</div>
+      <div class="row"><button class="pill ghost" id="v-test" type="button">Hear Luna</button></div>
+    </details>
+
     <div id="native-box" class="hidden">
-      <div class="h2">Phone powers</div>
+    <details class="sgrp"><summary>Phone powers</summary>
       <div class="prow"><div class="grow"><b>Your music</b><div class="sub dim" id="p-audio"></div></div><button class="pill" id="p-scan" type="button">Scan phone</button></div>
       <div class="prow"><div class="grow"><b>Microphone</b><div class="sub dim" id="p-mic"></div></div><button class="pill" id="p-micb" type="button">Allow</button></div>
       <div class="prow"><div class="grow"><b>Music from other apps</b><div class="sub dim" id="p-listener"></div></div><button class="pill" id="p-listenerb" type="button">Turn on</button></div>
       <div class="prow"><div class="grow"><b>Floating island</b><div class="sub dim" id="p-overlay"></div></div><button class="pill" id="p-overlayb" type="button">Allow</button></div>
       <label class="check"><input type="checkbox" id="s-island"> Show Luna's floating island while music plays</label>
+    </details>
     </div>
-    <div class="row wrap"><button class="pill" id="set-add">Add songs</button><button class="pill ghost danger" id="set-clear">Remove all songs</button></div>
-    <div class="sub dim" id="set-info"></div>
+
+    <details class="sgrp"><summary>Storage</summary>
+      <div class="sub" id="set-info"></div>
+      <div class="sub dim" id="set-copy"></div>
+      <div class="row wrap"><button class="pill" id="set-slim" type="button">Free up space</button><button class="pill ghost" id="set-add" type="button">Add songs (copies them)</button></div>
+      <div class="sub dim">Songs found with "Scan phone" are played from where they are, so they take no extra space. Songs added by hand are copied into the app.</div>
+      <div class="row wrap"><button class="pill ghost danger" id="set-clear" type="button">Remove all songs</button><button class="pill ghost danger" id="set-hist" type="button">Clear listening history</button></div>
+    </details>
+
+    <details class="sgrp"><summary>Performance</summary>
+      <label>Animation speed<select id="s-fps"><option value="60">Smooth (60 fps)</option><option value="30">Battery saver (30 fps)</option><option value="20">Extra saver (20 fps)</option></select></label>
+      <label class="check"><input type="checkbox" id="s-sleepscr"> Pause animations when I leave the app</label>
+    </details>
+
+    <details class="sgrp"><summary>Chat brain (optional)</summary>
+      <label>Claude API key<input id="s-key" type="password" placeholder="sk-ant-..." autocomplete="off"></label>
+      <div class="sub dim">Not needed. Luna chats fine without it. The key stays on this phone and is only sent to Anthropic.</div>
+    </details>
   </div></div>
 
   <div id="menu" class="menu hidden"></div>

@@ -13,7 +13,9 @@ export async function refreshStatus() {
   try { Object.assign(status, await P.status()); ext.ownPkg = status.pkg || ext.ownPkg; } catch (e) { }
   return status;
 }
+export let active = true;
 if (isNative) {
+  P.addListener("appstate", m => { active = !!m.active; });
   P.addListener("media", m => { ext.has = !!m.title || m.playing; ext.playing = !!m.playing; ext.title = m.title || ""; ext.artist = m.artist || ""; ext.pkg = m.pkg || ""; listeners.forEach(f => f()); });
   P.addListener("level", m => { ext.viz = true; ext.level = m.level || 0; ext.bpm = m.bpm || 0; ext.energy = m.energy || 0; if (m.beat) { ext.beat = true; ext.beats++; ext.lastBeat = performance.now() / 1000; } });
   refreshStatus();
@@ -33,6 +35,7 @@ export const control = a => { if (isNative) P.control({ action: a }).catch(() =>
 
 // ---- music on the phone (needs the music permission)
 export async function scanMusic() { const r = await P.scanMusic(); return r.songs || []; }
+export const urlFor = uri => cap.convertFileSrc(uri);
 export const fileFor = s => { const url = cap.convertFileSrc(s.uri); return fetch(url).then(r => r.blob()).then(b => new File([b], s.name, { type: b.type || "audio/mpeg" })); };
 // ---- permissions and settings screens
 export const setNow = (title, artist, playing) => { if (isNative) P.setNow({ title: title || "", artist: artist || "", playing: !!playing }).catch(() => { }); };
@@ -50,13 +53,19 @@ export const setIsland = async on => { await P.setIsland({ enabled: on }); await
 export async function sendArt(idle, sing) { if (isNative) { try { await P.setArt({ idle, sing }); } catch (e) { } } }
 export function setForeground(v) { }
 // ---- speech to text through Android (the web version of this does not exist inside the app)
-export function listen(onText, onEnd) {
-  const h = [];
-  P.addListener("speech", m => { if (m.text) onText(m.text); if (m.done) { onEnd(); } }).then(x => h.push(x));
-  P.startSpeech().catch(() => onEnd());
+const SPEECH_ERR = { nospeech: "This phone has no speech service. Install or update the Google app.", silence: "I didn't hear anything. Try again a bit closer.", permission: "I need the microphone permission. Open Settings > Phone powers.", network: "Speech needs internet. Check your connection.", busy: "The mic is busy. Wait a second and try again.", other: "The mic had a problem. Try again." };
+let speechHandle = null;
+export function listen(onText, onEnd, onError, onPartial) {
+  let last = "", gave = false;
+  const sub = P.addListener("speech", m => {
+    if (m.text) { last = m.text; if (!m.done && onPartial) onPartial(m.text); }
+    if (m.error && onError) onError(SPEECH_ERR[m.error] || SPEECH_ERR.other);
+    if (m.done) { if (last && !gave) { gave = true; onText(last); } finish(); onEnd(); }
+  });
+  let ended = false; const finish = () => { if (ended) return; ended = true; sub.then(x => x.remove && x.remove()); };
+  P.startSpeech().catch(() => { finish(); onEnd(); });
   return () => { P.stopSpeech().catch(() => { }); };
 }
-
 // ---- Luna's voice through Android text-to-speech
 export const ttsVoices = async () => { try { return (await P.ttsVoices()).voices || []; } catch (e) { return []; } };
 export const ttsStop = () => { if (isNative) P.ttsStop().catch(() => { }); };

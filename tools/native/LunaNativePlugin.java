@@ -130,10 +130,10 @@ public class LunaNativePlugin extends Plugin {
     }
 
     @Override
-    protected void handleOnResume() { foreground = true; Island.foreground = true; Island.update(); }
+    protected void handleOnResume() { foreground = true; Island.foreground = true; Island.update(); JSObject o = new JSObject(); o.put("active", true); notifyListeners("appstate", o); }
 
     @Override
-    protected void handleOnPause() { foreground = false; Island.foreground = false; Island.update(); }
+    protected void handleOnPause() { foreground = false; Island.foreground = false; Island.update(); JSObject o = new JSObject(); o.put("active", false); notifyListeners("appstate", o); }
 
     static void emit(String name, JSObject data) {
         if (inst != null) inst.notifyListeners(name, data);
@@ -317,19 +317,32 @@ public class LunaNativePlugin extends Plugin {
         Activity a = getActivity();
         a.runOnUiThread(() -> {
             try {
-                if (!SpeechRecognizer.isRecognitionAvailable(a)) { call.reject("No speech service on this phone"); return; }
-                if (recognizer != null) recognizer.destroy();
+                if (!SpeechRecognizer.isRecognitionAvailable(a)) {
+                    JSObject o = new JSObject(); o.put("done", true); o.put("error", "nospeech"); notifyListeners("speech", o);
+                    call.resolve(); return;
+                }
+                Island.stopViz();            // the audio capture of the island would block the microphone
+                if (recognizer != null) { try { recognizer.destroy(); } catch (Exception ignored) { } }
                 recognizer = SpeechRecognizer.createSpeechRecognizer(a);
                 recognizer.setRecognitionListener(new RecognitionListener() {
-                    public void onReadyForSpeech(Bundle b) { }
+                    public void onReadyForSpeech(Bundle b) { JSObject o = new JSObject(); o.put("ready", true); notifyListeners("speech", o); }
                     public void onBeginningOfSpeech() { }
                     public void onRmsChanged(float v) { }
                     public void onBufferReceived(byte[] b) { }
                     public void onEndOfSpeech() { }
                     public void onEvent(int i, Bundle b) { }
-                    public void onError(int e) { JSObject o = new JSObject(); o.put("done", true); notifyListeners("speech", o); }
+                    public void onError(int e) {
+                        JSObject o = new JSObject(); o.put("done", true);
+                        // 7 = nothing heard, 6 = no speech, 9 = no permission, 5/3 = client/audio problems, 2/1 = network
+                        o.put("error", e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ? "silence"
+                                : e == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ? "permission"
+                                : e == SpeechRecognizer.ERROR_NETWORK || e == SpeechRecognizer.ERROR_NETWORK_TIMEOUT ? "network"
+                                : e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ? "busy" : "other");
+                        notifyListeners("speech", o);
+                        Island.update();
+                    }
                     public void onPartialResults(Bundle b) { send(b, false); }
-                    public void onResults(Bundle b) { send(b, true); }
+                    public void onResults(Bundle b) { send(b, true); Island.update(); }
                     private void send(Bundle b, boolean done) {
                         ArrayList<String> r = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                         JSObject o = new JSObject();
@@ -340,10 +353,16 @@ public class LunaNativePlugin extends Plugin {
                 });
                 Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
                 i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+                i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault().toLanguageTag());
                 i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+                i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+                i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, a.getPackageName());
                 recognizer.startListening(i);
                 call.resolve();
-            } catch (Exception e) { call.reject(String.valueOf(e.getMessage())); }
+            } catch (Exception e) {
+                JSObject o = new JSObject(); o.put("done", true); o.put("error", "other"); notifyListeners("speech", o);
+                call.resolve();
+            }
         });
     }
 

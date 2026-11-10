@@ -3,6 +3,7 @@ import { Pix, GW, GH, SCALE, FY, DESK_X, CENTER, mix } from "./pix.js";
 import { PAL, g, SceneRoom } from "./scene1.js";
 import { SceneFace } from "./scene2.js";
 import { Body } from "./body.js";
+import { SceneExtras } from "./scene3.js";
 import { cleanWear, makeWear, HAIR } from "./wear.js";
 const sin = Math.sin;
 export const FACE_POSES = ["ears", "cupear", "blush", "cry", "fan", "call", "snack", "sing", "held", "wave", "twirl", "stumble"];
@@ -17,11 +18,12 @@ export class Scene {
     let pose = s.pose;
     this.room(s); this.tv(s); this.snack_table(s);
     if (pose === "bed") {
-      this.sleep(s); this.sparkles(s); p.dim(0.66); return p;
+      this.drawPet(s); this.sleep(s); this.sparkles(s); p.dim(0.66); return p;
     }
     this.bed(s, false);
     const atDesk = pose === "laptop" && Math.abs(s.cx - DESK_X) < 2.5 && s.sit > 0.5;
     if (!atDesk) this.desk(s, false);
+    this.drawPet(s);
     const lift = g(s, "lift", 0), lean = g(s, "lean", 0), look = g(s, "look", [0, 0]);
     p.ell(s.cx, FY, 13 - s.bounce * 2 - lift * 0.15, 2.2, PAL.shadow);
     if (s.sit > 0.5 && ["sit", "game", "read", "phone", "stumble"].includes(pose)) { p.ell(s.cx, 92.5, 19, 4.6, "#c24a90"); p.ell(s.cx, 91.8, 18, 4, "#ff7cb8"); }
@@ -47,5 +49,5 @@ export class Scene {
     return p;
   }
 }
-Object.assign(Scene.prototype, SceneRoom, SceneFace, Body);
+Object.assign(Scene.prototype, SceneRoom, SceneFace, Body, SceneExtras);
 export { PAL };

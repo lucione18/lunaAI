@@ -52,7 +52,9 @@ export const SOCKS = {
   "knee socks": { c: "#f4f1ff", d: "#cfc8ea", h: 7 },
   "thigh highs": { c: "#2a2540", d: "#1b1730", h: 12 },
 };
-export const ACCESSORIES = ["glasses", "beanie", "cat ears", "bow", "scarf", "choker", "headphones", "santa hat", "witch hat", "flower crown"];
+export const ANIME_ACC = ["straw hat", "ninja headband", "fox mask", "grimoire", "star wand"];
+export const HOLIDAY_ACC = ["santa hat", "witch hat", "bunny ears", "party hat", "flower crown"];
+export const ACCESSORIES = ["glasses", "beanie", "cat ears", "bow", "scarf", "choker", "headphones", "santa hat", "witch hat", "flower crown", "bunny ears", "party hat", ...ANIME_ACC];
 export const HAIR = {
   pink: ["#ff6ab8", "#e24a9c", "#ff9fd3"], blue: ["#5aa8ff", "#3a7ad8", "#9fcfff"],
   purple: ["#a672ff", "#7a4ad8", "#cfaaff"], mint: ["#4fe0b4", "#2fb08a", "#9ff5d6"],
@@ -80,7 +82,18 @@ export const PRESETS = {
   christmas: { dress: "santa dress", shoes: "boots", socks: "thigh highs", acc: ["santa hat"] },
   halloween: { dress: "witch dress", shoes: "boots", socks: "thigh highs", acc: ["witch hat"] },
   valentine: { dress: "valentine dress", shoes: "strap shoes", socks: "white socks", acc: ["bow"] },
+  easter: { dress: "mint dress", shoes: "flats", socks: "white socks", acc: ["bunny ears"] },
+  "new year": { dress: "lilac dress", shoes: "boots", socks: "thigh highs", acc: ["party hat"] },
+  ninja: { top: "black tee", bottom: "cargo pants", shoes: "boots", socks: "none", acc: ["ninja headband"] },
+  "sea adventurer": { top: "white tee", bottom: "denim shorts", shoes: "flats", socks: "none", acc: ["straw hat"] },
+  "young mage": { dress: "witch dress", shoes: "boots", socks: "knee socks", acc: ["grimoire"] },
+  "festival fox": { dress: "cherry dress", shoes: "strap shoes", socks: "white socks", acc: ["fox mask"] },
+  "magical girl": { dress: "valentine dress", shoes: "strap shoes", socks: "white socks", acc: ["star wand", "bow"] },
 };
+export const HOLIDAY_PRESETS = ["christmas", "halloween", "valentine", "easter", "new year"];
+export const ANIME_PRESETS = ["ninja", "sea adventurer", "young mage", "festival fox", "magical girl"];
+// the main colour of what she wears, used to tint the app
+export function outfitColor(w) { const it = (w.dress && DRESSES[w.dress]) || TOPS[w.top] || DRESSES["sailor dress"]; return it.c; }
 export const DEFAULT_WEAR = { top: "white tee", bottom: "jeans", dress: "sailor dress", shoes: "strap shoes", socks: "white socks", acc: ["headphones"] };
 
 export function makeWear(preset = "sailor", acc = null, keep = null) {

@@ -177,6 +177,28 @@ export class Behavior {
     }
   }
   // audio: { playing, paused, index, title, level (0..1), beat (bool), mood }
+  // ---- pet companion
+  setPet(kind, color, name) {
+    if (!kind) { this.pet = null; return; }
+    const old = this.pet || {};
+    this.pet = { kind, color: color | 0, name: name || "", x: old.x || 150, dir: old.dir || 1, state: "sit", hop: 0, heart: 0, goal: old.x || 150, until: 0 };
+  }
+  petTap(now) { if (!this.pet) return null; this.pet.heart = 1; this.pet.hop = 0.5; return this.pet; }
+  updatePet(now, dt, beat, sleeping) {
+    const p = this.pet; if (!p) return;
+    if (p.hop > 0) p.hop = Math.max(0, p.hop - dt); if (p.heart > 0) p.heart = Math.max(0, p.heart - dt * 0.7);
+    if (beat && this.pose === "dance" && p.state !== "sleep") p.hop = Math.max(p.hop, 0.35);
+    const n = new Date(), late = n.getHours() >= 22 || n.getHours() < 6;
+    if (sleeping || late) { if (p.state !== "sleep") { p.goal = 82; } if (Math.abs(p.x - p.goal) < 1.5 && p.goal === 82) p.state = "sleep"; }
+    else if (p.state === "sleep") { p.state = "sit"; p.until = now + 1; }
+    if (p.state !== "sleep" && now >= p.until && !(sleeping || late)) {
+      p.until = now + 3 + Math.random() * 6;
+      p.goal = Math.random() < 0.4 ? Math.max(30, Math.min(180, this.cx + (Math.random() < 0.5 ? -16 : 16))) : 30 + Math.random() * 150;
+    }
+    const dx = p.goal - p.x;
+    if (Math.abs(dx) > 1.2) { p.state = p.state === "sleep" ? "walk" : "walk"; p.dir = dx > 0 ? 1 : -1; p.x += Math.sign(dx) * Math.min(Math.abs(dx), 13 * dt); }
+    else if (p.state === "walk") p.state = "sit";
+  }
   update(now, dt, audio, pointer) {
     const P = this.nowPlaying = audio;
     const [pi, pp, ppa] = this.prev;
@@ -191,6 +213,7 @@ export class Behavior {
     if (P.playing && !P.paused && ACTIVE.includes(this.mood)) { v = P.level || 0; beat = !!P.beat; }
     else if (this.speaking || this.pose === "sing") v = 0.5 + 0.5 * Math.sin(now * 9);
     this.env_s += (v - this.env_s) * Math.min(1, dt * 18);
+    this.updatePet(now, dt, beat, this.pose === "bed");
     const want = this.choosePose(now), prevPose = this.pose;
     this.move(want, now, dt);
     if (prevPose === "bed" && this.pose !== "bed" && this.onWake) this.onWake(now);
@@ -240,6 +263,7 @@ export class Behavior {
     }
     if (now < this.surprise_until) return { eyes: "surprised", brows: "up", mouth: "o", blush: 0.6 };
     const m = this.mood;
+    if (m === "idle" && this.tired && !["bed", "dance"].includes(pose)) return { eyes: "sleepy", brows: "soft", mouth: pmod(now, 12) > 10 ? "sing" : "flat", blush: 0.4 };
     if (m === "idle") {
       let e = { ...(POSE_EXPR[pose] || { eyes: pmod(now, 9) > 7.8 ? "wink" : "open", brows: "neutral", mouth: "omega", blush: 0.5 }) };
       if (pose === "game") { const alt = Math.trunc(now / 4) % 2; e = { eyes: "open", brows: alt ? "angry" : "up", mouth: alt ? "grin" : "sing", blush: 0.5 }; }
@@ -267,7 +291,7 @@ export class Behavior {
       bg: P.bg, glow: P.glow, v: this.env_s, cx: this.cx, t: now, sw: P.sw, sway: P.sway * 0.28,
       amp: P.bounce * (dance ? 0.3 : 0.08), bounce: this.bounce, moving: ACTIVE.includes(this.mood) && dance, mood: this.mood, pose, sit: this.sit,
       walk_dir: this.walk_dir, walk_phase: this.walk_phase, blink: (now % 3.6) < 0.12 || ((now + 1.7) % 5.3) < 0.1, gaze, arms: P.arms,
-      parts: this.parts.map(p => [p[0], p[1], p[5], p[6]]), hour: n.getHours(), minute: n.getMinutes(), expr: this.expr, wear: this.wear,
+      parts: this.parts.map(p => [p[0], p[1], p[5], p[6]]), hour: n.getHours(), minute: n.getMinutes(), day: n.getDate(), month: n.getMonth(), decor: this.decor || [], pet: this.pet || null, expr: this.expr, wear: this.wear,
       theme: this.theme, season: this.season, weather: (this.weather && this.weather.kind) || "mild", glasses: this.glasses, headphones: this.headphones,
       speaking: this.speaking, lift: this.lift, lean: this.lean, look: active ? [...this.look] : [0, 0], snack: this.snack, eat: this.eat, eating: this.eating,
       ev: this.event ? (now - this.event.start) / (this.event.end - this.event.start) : 0,

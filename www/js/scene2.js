@@ -121,6 +121,27 @@ export const SceneFace = {
       p.poly([[hx - 14, hy - 12], [hx + 14, hy - 12], [hx + 4, hy - 38], [hx - 1, hy - 40], [hx - 5, hy - 30]], "#3a2a5a");
       p.rect(hx - 14, hy - 17, hx + 14, hy - 13, "#ff9a2a"); p.rect(hx - 2, hy - 18, hx + 2, hy - 12, "#ffe66b");
     }
+    if (acc.includes("bunny ears")) for (const side of [-1, 1]) { p.ell(hx + side * 8, hy - 28, 3.4, 9, "#ffffff"); p.ell(hx + side * 8, hy - 28, 1.7, 7, "#ffb3d9"); }
+    if (acc.includes("party hat")) {
+      p.poly([[hx - 8, hy - 10], [hx + 8, hy - 10], [hx + 1, hy - 34]], "#6be3ff");
+      for (const [k, c] of [[0.3, "#ff6fa8"], [0.6, "#ffe66b"]]) p.line(hx - 8 + 8 * k, hy - 10 - 24 * k * 0.9, hx + 8 - 8 * k * 1.1, hy - 10 - 24 * k * 0.9, 1.2, c);
+      p.ell(hx + 1, hy - 35, 2.6, 2.6, "#ffe66b");
+    }
+    if (acc.includes("straw hat")) {
+      p.ell(hx, hy - 11, 27, 5.2, "#e8c25a"); p.ell(hx, hy - 15, 15, 9.5, "#f3d27a");
+      p.rect(hx - 14.5, hy - 14.5, hx + 14.5, hy - 10.5, "#d8303c"); p.line(hx - 25, hy - 11, hx + 25, hy - 11, 0.8, "#c9a23f");
+    }
+    if (acc.includes("ninja headband")) {
+      p.rect(hx - 20, hy - 12, hx + 20, hy - 7, "#2f4fb0"); p.rect(hx - 8, hy - 12.5, hx + 8, hy - 6.5, "#cfd6e8"); p.rect(hx - 8, hy - 12.5, hx + 8, hy - 11.5, "#ffffff");
+      p.pl([[hx - 5, hy - 9.5], [hx - 1, hy - 8], [hx + 1, hy - 10.5], [hx + 5, hy - 9]], 0.7, "#6a7390");
+      p.poly([[hx + 20, hy - 10], [hx + 27, hy - 5], [hx + 24, hy - 12]], "#2f4fb0"); p.poly([[hx + 20, hy - 9], [hx + 26, hy - 1], [hx + 22.5, hy - 8]], "#2f4fb0");
+    }
+    if (acc.includes("fox mask")) {
+      p.poly([[hx + 8, hy - 20], [hx + 11, hy - 31], [hx + 15, hy - 20]], "#ffffff"); p.poly([[hx + 15, hy - 19], [hx + 21, hy - 28], [hx + 22, hy - 15]], "#ffffff");
+      p.ell(hx + 16, hy - 10, 8.5, 9.5, "#ffffff"); p.ell(hx + 16, hy - 10, 8.5, 9.5, "#f7f2ff");
+      p.line(hx + 11, hy - 14, hx + 15, hy - 12.5, 1, "#ff4f6d"); p.line(hx + 21, hy - 14, hx + 18, hy - 12.5, 1, "#ff4f6d");
+      p.line(hx + 12, hy - 7, hx + 20, hy - 7, 0.9, "#ff4f6d"); p.ell(hx + 16, hy - 4, 1.4, 1.2, "#2a1740"); p.line(hx + 9, hy - 17, hx + 9, hy - 8, 0.5, "#cfc8ea");
+    }
     if (acc.includes("flower crown")) ["#ffffff", "#ffb3d9", "#ffe66b", "#ffffff", "#ffb3d9", "#ffe66b", "#ffffff"].forEach((col, k) => {
       const a = rad(200 + k * 23), fx = hx + 19.5 * cos(a), fy = hy - 6 + 16 * sin(a);
       p.ell(fx, fy, 2.7, 2.7, col); p.dot(fx, fy, "#f0a030", 0.9); p.line(fx + 2, fy + 1, fx + 4, fy + 2, 0.7, "#4fb870");
@@ -226,6 +247,16 @@ export const SceneFace = {
   },
   items(s, hx, hy, cx, top, hands) {
     const p = this.p, t = s.t, pose = s.pose, [lh, rh] = hands;
+    const busy = ["call", "phone", "read", "sing", "snack", "game", "laptop", "cry", "ears", "cupear", "blush", "wave", "twirl", "stumble", "held", "fan", "angry"].includes(pose);
+    if (!busy && this.W.acc.includes("grimoire")) {
+      const bx = lh[0] + 3, by = lh[1] - 8, fl = sin(t * 3) * 0.6;
+      p.rect(bx - 6, by - 7 + fl, bx + 6, by + 8 + fl, "#4a2a8a"); p.rect(bx - 6, by - 7 + fl, bx - 4.5, by + 8 + fl, "#2e1a5a"); p.rect(bx + 5, by - 6 + fl, bx + 6.5, by + 7 + fl, "#f4f1ff");
+      p.spr(bx + 0.5, by + 0.5 + fl, "spark", "#ffe66b"); p.rect(bx + 5.4, by - 1 + fl, bx + 7, by + 1 + fl, "#ffe66b"); this.hand_dot(lh);
+      p.dot(bx + 8, by - 9 + sin(t * 4) * 2, "#ffe66b", 0.8); p.dot(bx - 7, by - 11 + sin(t * 3 + 1) * 2, "#6be3ff", 0.7);
+    }
+    if (!busy && this.W.acc.includes("star wand")) {
+      p.line(rh[0], rh[1], rh[0] + 9, rh[1] - 16, 1.2, "#cfc8f0"); p.spr(rh[0] + 9.5, rh[1] - 18, "spark", "#ff9fd3"); p.ell(rh[0] + 9.5, rh[1] - 18, 2.4 + sin(t * 6) * 0.4, 2.4, "#ffe66b"); this.hand_dot(rh);
+    }
     if (pose === "call") {
       p.rect(hx + 17, hy - 3, hx + 20.5, hy + 8, PAL.phone); p.rect(hx + 17.5, hy - 2, hx + 18.7, hy + 6, "#7fd3ff");
       this.hand_dot(rh);

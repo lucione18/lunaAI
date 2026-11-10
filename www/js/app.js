@@ -7,6 +7,7 @@ import { I } from "./icons.js";
 import * as W from "./wear.js";
 import * as B from "./brain.js";
 import { THEMES } from "./scene1.js";
+import { DECOR_NAMES } from "./scene3.js";
 import * as N from "./native.js";
 import * as V from "./voice.js";
 
@@ -44,9 +45,9 @@ function applyLook() {
     if (cfg.get("last_holiday", "") !== tag) { cfg.set("last_holiday", tag); wearPreset(W.HOLIDAY_OUTFIT[se], false); setTimeout(() => luna(W.HOLIDAY_LINE[se]), 1500); }
   }
 }
-function saveWear() { cfg.set("wear", wear); beh.wear = wear; renderWardrobe(false); drawPreview(); pushArt(); }
+function saveWear() { cfg.set("wear", wear); beh.wear = wear; renderWardrobe(false); drawPreview(); pushArt(); if (cfg.get("accent_mode", "default") === "outfit") applyAccent(); }
 function wearPreset(name, announce = true) {
-  wear = W.makeWear(name, wear.acc.filter(a => !["santa hat", "witch hat"].includes(a)), wear); saveWear(); beh.startEvent("twirl", nowS());
+  wear = W.makeWear(name, wear.acc.filter(a => !W.ANIME_ACC.includes(a) && !["santa hat", "witch hat", "bunny ears", "party hat"].includes(a)), wear); saveWear(); beh.startEvent("twirl", nowS());
   if (announce) say(`Ta-da! My ${name} look!`, 3);
 }
 function wearSet(slot, name) {
@@ -76,7 +77,11 @@ function pushArt() {
 const TABS = [["room", "Room", I.room], ["lib", "Library", I.lib], ["lyrics", "Lyrics", I.lyrics], ["chat", "Chat", I.chat], ["wardrobe", "Wardrobe", I.hanger]];
 let tab = "room";
 $("#nav").innerHTML = TABS.map(([id, label, ic]) => `<button data-t="${id}">${ic}<span>${label}</span></button>`).join("");
-function go(id) {
+const tabStack = ["room"], layers = [];
+function openLayer(n) { if (!layers.includes(n)) layers.push(n); }
+function closeLayer(n) { const i = layers.lastIndexOf(n); if (i >= 0) layers.splice(i, 1); }
+function go(id, fromBack = false) {
+  if (!fromBack && tabStack[tabStack.length - 1] !== id) { tabStack.push(id); if (tabStack.length > 12) tabStack.shift(); }
   tab = id; $$(".tab").forEach(t => t.classList.toggle("active", t.id === "tab-" + id)); $$("#nav button").forEach(b => b.classList.toggle("on", b.dataset.t === id));
   if (id === "lib") renderLib(); if (id === "lyrics") loadLyrics(); if (id === "wardrobe") { renderWardrobe(true); drawPreview(); }
   if (id === "chat") { const l = $("#log"); l.scrollTop = l.scrollHeight; }
@@ -90,7 +95,7 @@ $("#now-rep").innerHTML = I.repeat; $("#now-like").innerHTML = I.heartO; $("#now
 // ------------------------------------------------------------------ menus
 function showMenu(title, items) {
   const m = $("#menu"); m.innerHTML = (title ? `<div class="mh">${esc(title)}</div>` : "") + items.map((it, i) => `<button data-i="${i}" class="${it.danger ? "danger" : ""}">${esc(it.label)}</button>`).join("");
-  m.classList.remove("hidden");
+  m.classList.remove("hidden"); openLayer("menu");
   m.onclick = e => { const b = e.target.closest("button"); if (!b) return; m.classList.add("hidden"); items[+b.dataset.i].fn(); };
   setTimeout(() => { const off = e => { if (!m.contains(e.target)) { m.classList.add("hidden"); document.removeEventListener("pointerdown", off, true); } }; document.addEventListener("pointerdown", off, true); }, 0);
 }
@@ -183,7 +188,7 @@ async function scanPhone() {
   say("Ooh, so much music! Give me a moment...", 6); let ok = 0;
   for (let i = 0; i < todo.length; i++) {
     toast(`Adding ${i + 1}/${todo.length}`);
-    try { const f = await N.fileFor(todo[i]); await player.addFiles([f], null, true); ok++; } catch (e) { }
+    try { const f = await N.fileFor(todo[i]); await player.addFiles([f], null, true, new Map([[f, todo[i].uri]])); ok++; } catch (e) { }
   }
   player.sortSongs(); player.emit(); player.fillDurations(); renderLib();
   luna(`I added ${ok} song${ok === 1 ? "" : "s"} from your phone!`);
@@ -235,8 +240,8 @@ $("#now-shuf").onclick = () => { player.setShuffle(!player.shuffle); toast("Shuf
 $("#now-rep").onclick = () => { const m = { off: "all", all: "one", one: "off" }[player.repeat]; player.setRepeat(m); toast("Repeat " + m); };
 $("#now-pl").onclick = () => player.current && playlistPicker(player.current);
 $("#now-menu").onclick = () => player.current && songMenu(player.current);
-$("#mini-open").onclick = () => { $("#sheet-now").classList.remove("hidden"); };
-$("#now-close").onclick = () => $("#sheet-now").classList.add("hidden");
+$("#mini-open").onclick = () => { $("#sheet-now").classList.remove("hidden"); openLayer("now"); };
+$("#now-close").onclick = () => { $("#sheet-now").classList.add("hidden"); closeLayer("now"); };
 $("#now-vol").oninput = e => player.setVolume(e.target.value / 100);
 let seeking = false; const seek = $("#now-seek");
 seek.oninput = () => { seeking = true; }; seek.onchange = () => { player.seek(seek.value / 1000); seeking = false; };
@@ -263,15 +268,32 @@ async function loadLyrics(force = false) {
 }
 function renderLyrics() {
   const body = $("#ly-body");
+  applyLyricsLook();
   if (ly.synced.length) { body.className = "lyrics"; body.innerHTML = ly.synced.map((l, i) => `<p data-i="${i}">${esc(l[1] || "♪")}</p>`).join(""); body.onclick = e => { const p = e.target.closest("p"); if (p) player.audio.currentTime = ly.synced[+p.dataset.i][0]; }; }
   else { body.className = "lyrics plain"; body.textContent = ly.plain; body.onclick = null; }
   $("#ly-sub").textContent = `${player.current.artist} · lyrics ${ly.src}`; ly.cur = -2;
 }
+function applyLyricsLook() {
+  const b = $("#ly-body"); b.dataset.style = cfg.get("lyr_style", "karaoke"); b.style.setProperty("--ly-size", cfg.get("lyr_size", 20) + "px");
+}
 function followLyrics() {
   if (tab !== "lyrics" || !ly.synced.length || !player.playing) return;
-  const i = B.currentLine(ly.synced, player.audio.currentTime); if (i === ly.cur) return; ly.cur = i;
-  const ps = $$("#ly-body p"); ps.forEach((p, k) => { p.classList.toggle("cur", k === i); p.classList.toggle("past", k < i); });
-  if (ps[i]) ps[i].scrollIntoView({ block: "center", behavior: "smooth" });
+  const T = player.audio.currentTime, i = B.currentLine(ly.synced, T), style = cfg.get("lyr_style", "karaoke");
+  if (i !== ly.cur) {
+    const prev = ly.cur; ly.cur = i;
+    const ps = $$("#ly-body p");
+    ps.forEach((p, k) => { p.classList.toggle("cur", k === i); p.classList.toggle("past", k < i); p.style.setProperty("--d", Math.min(4, Math.abs(k - i))); });
+    if (ps[prev] && ps[prev]._plain !== undefined) { ps[prev].textContent = ps[prev]._plain; }
+    if (ps[i]) {
+      const el = ps[i]; el._plain = el.textContent;
+      if (style === "wave") el.innerHTML = [...el._plain].map((c, k) => `<span style="animation-delay:${k * 45}ms">${c === " " ? "&nbsp;" : esc(c)}</span>`).join("");
+      el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop");
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }
+  if (style === "karaoke" && i >= 0) {
+    const el = $$("#ly-body p")[i]; if (el) { const t0 = ly.synced[i][0], t1 = ly.synced[i + 1] ? ly.synced[i + 1][0] : t0 + 4; el.style.setProperty("--p", Math.max(0, Math.min(100, (T - t0) / Math.max(0.3, t1 - t0) * 100)).toFixed(1) + "%"); }
+  }
 }
 $("#ly-edit").onclick = () => { if (!player.current) return toast("Play a song first"); $("#ly-text").value = myLyr(player.current.id) || (ly.plain || ly.synced.map(l => l[1]).join("\n")); $("#ly-editor").classList.remove("hidden"); $("#ly-body").classList.add("hidden"); };
 $("#ly-cancel").onclick = () => { $("#ly-editor").classList.add("hidden"); $("#ly-body").classList.remove("hidden"); };
@@ -337,6 +359,9 @@ function runCommand(text, silent = false) {
   if (/^(wardrobe|closet|outfits|open wardrobe)$/.test(low)) { go("wardrobe"); return; }
   if (low === "settings") { openSettings(); return; }
   m = /^mood\s+(hype|happy|chill|sad|intense|auto)/.exec(low); if (m) { P.moodOverride = m[1] === "auto" ? null : m[1]; return reply(m[1] === "auto" ? "I'll feel the music myself." : `Okay, ${m[1]} mood!`); }
+  if (/^(sing|sing (me )?(a )?song|sing something)$/.test(low)) { singSong(); return; }
+  if (/^(send )?(a )?stickers?( please)?$/.test(low) || /^send me a sticker/.test(low)) { sendSticker(); return; }
+  if (/^(send )?(an? )?emojis?( please)?$/.test(low)) { sendEmoji(); return; }
   m = /^talk\s+(on|off)/.exec(low); if (m) { voiceOn = m[1] === "on"; cfg.set("voice", voiceOn); return reply(voiceOn ? "I'll read my replies out loud." : "Okay, I'll stay quiet."); }
   // info
   m = /^(?:weather|forecast)(?: in (.+))?$/.exec(low) || /^what'?s the weather(?: in (.+))?/.exec(low);
@@ -395,8 +420,8 @@ $("#quick").onclick = e => { const b = e.target.closest("button"); if (!b) retur
     mic.onclick = async () => {
       if (stopFn) { stopFn(); return; }
       if (!(await N.askMic())) return toast("I need the microphone permission to hear you.");
-      mic.classList.add("on");
-      stopFn = N.listen(v => { logMsg("me", v); runCommand(v); }, () => { stopFn = null; mic.classList.remove("on"); });
+      mic.classList.add("on"); const inp = $("#chatin"); inp.placeholder = "Listening...";
+      stopFn = N.listen(v => { inp.value = ""; logMsg("me", v); runCommand(v); }, () => { stopFn = null; mic.classList.remove("on"); inp.placeholder = "Say something to Luna..."; }, m => toast(m), v => { inp.value = v; });
     };
     return;
   }
@@ -423,7 +448,7 @@ function checkReminders() {
 }
 
 // ------------------------------------------------------------------ wardrobe
-const CATS = [["Outfits", "preset"], ["Tops", "top"], ["Bottoms", "bottom"], ["Dresses", "dress"], ["Shoes", "shoes"], ["Socks", "socks"], ["Accessories", "acc"], ["Hair colour", "hair"], ["Hairstyle", "style"]];
+const CATS = [["Outfits", "preset"], ["Holiday", "holiday"], ["Anime", "anime"], ["Pets", "pets"], ["Tops", "top"], ["Bottoms", "bottom"], ["Dresses", "dress"], ["Shoes", "shoes"], ["Socks", "socks"], ["Accessories", "acc"], ["Hair colour", "hair"], ["Hairstyle", "style"]];
 let wcat = "preset";
 $("#wcats").innerHTML = CATS.map(([n, k]) => `<button class="chip" data-k="${k}">${n}</button>`).join("");
 $("#wcats").onclick = e => { const b = e.target.closest("button"); if (b) { wcat = b.dataset.k; renderWardrobe(true); } };
@@ -433,14 +458,40 @@ function swatch(slot, name) {
   if (slot === "acc") return name === "glasses" ? ["#4a3a7a", "#6a5fb0"] : ["#ffb3d9", "#7a5af0"];
   const it = ({ top: W.TOPS, bottom: W.BOTTOMS, dress: W.DRESSES, shoes: W.SHOES, socks: W.SOCKS }[slot] || {})[name]; return it ? [it.c, it.d] : ["#3a3550", "#26223a"];
 }
+const PETS = { cat: ["black", "ginger", "white"], bunny: ["white", "pink", "brown"], puppy: ["brown", "white", "black"], chick: ["yellow", "white", "orange"] };
+const PET_SW = { cat: ["#3a3550", "#ff9a4a", "#f4f1ff"], bunny: ["#ffffff", "#ffc4e3", "#b9a28a"], puppy: ["#c8905a", "#f4f1ff", "#3a3550"], chick: ["#ffe66b", "#ffffff", "#ffb347"] };
+const DECOR_SW = { "christmas tree": ["#2f9c5a", "#d8303c"], halloween: ["#ff8a1f", "#241436"], hearts: ["#ff6fa8", "#ffb3d9"], "easter eggs": ["#ff9fd3", "#6be3ff"], party: ["#ff4f6d", "#ffe66b"], birthday: ["#ff9fd3", "#ffe66b"], "diwali lights": ["#ffcf4d", "#c2541a"] };
+function loadPetAndDecor() { const p = cfg.get("pet", null); beh.setPet(p && p.kind, p && p.color, p && p.name); beh.decor = cfg.get("decor", []); }
+function wardItems() {
+  if (wcat === "holiday") return [...W.HOLIDAY_PRESETS.map(n => ({ k: "preset", n })), ...W.HOLIDAY_ACC.map(n => ({ k: "acc", n })), ...DECOR_NAMES.map(n => ({ k: "decor", n }))];
+  if (wcat === "anime") return [...W.ANIME_PRESETS.map(n => ({ k: "preset", n })), ...W.ANIME_ACC.map(n => ({ k: "acc", n }))];
+  if (wcat === "pets") return [{ k: "pet", n: "no pet" }, ...Object.keys(PETS).flatMap(kind => PETS[kind].map((c, i) => ({ k: "pet", n: `${kind} ${c}`, kind, i })))];
+  const names = wcat === "preset" ? Object.keys(W.PRESETS).filter(n => !W.HOLIDAY_PRESETS.includes(n) && !W.ANIME_PRESETS.includes(n)) : wcat === "acc" ? ["glasses", "headphones", ...W.ACCESSORIES.filter(a => a !== "glasses" && a !== "headphones" && !W.ANIME_ACC.includes(a) && !W.HOLIDAY_ACC.includes(a))] : wcat === "hair" ? Object.keys(W.HAIR) : wcat === "style" ? W.STYLES : Object.keys({ top: W.TOPS, bottom: W.BOTTOMS, dress: W.DRESSES, shoes: W.SHOES, socks: W.SOCKS }[wcat] || {});
+  return names.map(n => ({ k: wcat, n }));
+}
 function renderWardrobe(rebuildChips) {
   if (tab !== "wardrobe") return;
   $$("#wcats .chip").forEach(c => c.classList.toggle("on", c.dataset.k === wcat));
-  const names = wcat === "preset" ? Object.keys(W.PRESETS) : wcat === "acc" ? ["glasses", "headphones", ...W.ACCESSORIES.filter(a => a !== "glasses" && a !== "headphones")] : wcat === "hair" ? Object.keys(W.HAIR) : wcat === "style" ? W.STYLES : Object.keys({ top: W.TOPS, bottom: W.BOTTOMS, dress: W.DRESSES, shoes: W.SHOES, socks: W.SOCKS }[wcat]);
-  const sel = n => wcat === "acc" ? (n === "glasses" ? beh.glasses : n === "headphones" ? beh.headphones : wear.acc.includes(n)) : wcat === "preset" ? false : wcat === "hair" ? wear.hair === n : wcat === "style" ? wear.style === n : wear[wcat] === n || (n === "none" && !wear[wcat]);
-  $("#wgrid").innerHTML = names.map(n => { const [a, b] = swatch(wcat, n); return `<button class="wtile ${sel(n) ? "on" : ""}" data-n="${esc(n)}"><i style="background:linear-gradient(135deg,${a},${b})"></i>${esc(n)}</button>`; }).join("");
+  const decor = cfg.get("decor", []), pet = cfg.get("pet", null);
+  const isOn = it => it.k === "acc" ? (it.n === "glasses" ? beh.glasses : it.n === "headphones" ? beh.headphones : wear.acc.includes(it.n)) : it.k === "decor" ? decor.includes(it.n)
+    : it.k === "pet" ? (it.n === "no pet" ? !pet : !!(pet && pet.kind === it.kind && pet.color === it.i)) : it.k === "preset" ? false : it.k === "hair" ? wear.hair === it.n : it.k === "style" ? wear.style === it.n : wear[it.k] === it.n || (it.n === "none" && !wear[it.k]);
+  const sw = it => it.k === "decor" ? DECOR_SW[it.n] : it.k === "pet" ? (it.kind ? [PET_SW[it.kind][it.i], PET_SW[it.kind][it.i]] : ["#3a3550", "#26223a"]) : it.k === "acc" && W.ANIME_ACC.includes(it.n) ? ["#e8c25a", "#2f4fb0"] : it.k === "acc" && W.HOLIDAY_ACC.includes(it.n) ? ["#d8303c", "#ffffff"] : swatch(it.k, it.n);
+  const items = wardItems(), hint = wcat === "pets" ? `<div class="sub dim" style="grid-column:1/-1">Pick a pet. Tap it in the room to cuddle. ${pet ? "Name: " + esc(pet.name || "none") + " - pick the same pet again to rename." : ""}</div>` : wcat === "holiday" ? `<div class="sub dim" style="grid-column:1/-1">Outfits, hats and room decorations. Decorations stay until you tap them again.</div>` : wcat === "anime" ? `<div class="sub dim" style="grid-column:1/-1">Original anime-style gear: ninja headband, straw hat, fox mask, spellbook and more.</div>` : "";
+  $("#wgrid").innerHTML = hint + items.map((it, idx) => { const [x, y] = sw(it); return `<button class="wtile ${isOn(it) ? "on" : ""}" data-i="${idx}"><i style="background:linear-gradient(135deg,${x},${y})"></i>${esc(it.n)}</button>`; }).join("");
+  wardList = items;
 }
-$("#wgrid").onclick = e => { const b = e.target.closest(".wtile"); if (!b) return; const n = b.dataset.n; if (wcat === "preset") wearPreset(n); else if (wcat === "acc") wearToggle(n); else wearSet(wcat, n); };
+let wardList = [];
+$("#wgrid").onclick = e => {
+  const b = e.target.closest(".wtile"); if (!b) return; const it = wardList[+b.dataset.i]; if (!it) return;
+  if (it.k === "preset") wearPreset(it.n); else if (it.k === "acc") wearToggle(it.n);
+  else if (it.k === "decor") { const d = cfg.get("decor", []), on = d.includes(it.n); cfg.set("decor", on ? d.filter(x => x !== it.n) : [...d, it.n]); loadPetAndDecor(); renderWardrobe(false); if (!on) luna(pick(["So festive! I love it.", "The room looks so different now!", "Party time!"])); }
+  else if (it.k === "pet") {
+    if (it.n === "no pet") { cfg.set("pet", null); loadPetAndDecor(); renderWardrobe(false); return luna("Okay, the room is quiet again."); }
+    const old = cfg.get("pet", null); let name = old && old.kind === it.kind ? (prompt("Name your pet", old.name || "") || "").trim() : (old && old.name) || "";
+    if (!name && !(old && old.kind === it.kind)) name = (prompt("Name your new pet (optional)", "") || "").trim();
+    cfg.set("pet", { kind: it.kind, color: it.i, name }); loadPetAndDecor(); renderWardrobe(false); luna(`${name || "A new friend"}! Welcome to the room.`);
+  } else wearSet(it.k, it.n);
+};
 $("#w-random").onclick = () => wearPreset(pick(Object.keys(W.PRESETS)));
 const pctx = $("#wcanvas").getContext("2d"), pimg = pctx.createImageData(160, 184);
 function drawPreview() {
@@ -453,14 +504,44 @@ function drawPreview() {
 
 // ------------------------------------------------------------------ settings
 const themeSel = $("#s-theme"); themeSel.innerHTML = ["night", "sunset", "forest", "sakura"].map(t => `<option>${t}</option>`).join("");
+const ACCENTS = ["#ff74b8", "#b79bff", "#6be3ff", "#4fe0b4", "#ffd45a", "#ff9a4a", "#ff5a6a", "#7aa2ff"];
+$("#s-swatches").innerHTML = ACCENTS.map(c => `<button type="button" class="sw" data-c="${c}" style="background:${c}" aria-label="colour ${c}"></button>`).join("");
+$("#s-swatches").onclick = e => { const b = e.target.closest(".sw"); if (!b) return; cfg.set("accent_fav", b.dataset.c); cfg.set("accent_mode", "fav"); $("#s-accent-mode").value = "fav"; markSwatch(); applyAccent(); };
+const markSwatch = () => $$("#s-swatches .sw").forEach(b => b.classList.toggle("on", b.dataset.c === cfg.get("accent_fav", ACCENTS[0])));
+$("#s-accent-mode").onchange = e => { cfg.set("accent_mode", e.target.value); applyAccent(); };
+// the app takes its colour from Luna's outfit or from a favourite colour
+function shade(hex, f) { const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255, m = f < 0 ? 0 : 255, t = Math.abs(f); return "#" + [r, g, b].map(v => Math.round(v + (m - v) * t).toString(16).padStart(2, "0")).join(""); }
+function lightEnough(hex) { const n = parseInt(hex.slice(1), 16); const l = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); return l > 70 ? hex : shade(hex, 0.45); }
+function applyAccent() {
+  const mode = cfg.get("accent_mode", "default"); let c = "#ff74b8";
+  if (mode === "fav") c = cfg.get("accent_fav", ACCENTS[0]); else if (mode === "outfit") c = lightEnough(W.outfitColor(wear));
+  const r = document.documentElement.style; r.setProperty("--pink", c); r.setProperty("--hi", shade(c, -0.7)); r.setProperty("--cyan", shade(c, 0.6));
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = shade(c, -0.88);
+}
 function openSettings() {
   $("#s-name").value = cfg.get("name", ""); $("#s-city").value = cfg.get("city", ""); $("#s-hemi").value = cfg.get("hemi", "south"); themeSel.value = cfg.get("theme", "night");
   $("#s-season").checked = cfg.get("season_on", true); $("#s-voice").checked = voiceOn; $("#s-bed").value = beh.bedtime; $("#s-wake").value = beh.wake; $("#s-key").value = cfg.get("ai_key", "");
-  $("#set-info").textContent = `${player.songs.length} songs saved on this phone.`;
-  $("#s-vengine").value = cfg.get("voice_engine", "system"); fillVoices(); $("#s-vrate").value = Math.round(+cfg.get("voice_rate", 1) * 100); $("#s-vpitch").value = Math.round(+cfg.get("voice_pitch", 1.15) * 100);
-  $("#s-elkey").value = cfg.get("el_key", ""); $("#s-elvoice").value = cfg.get("el_voice", ""); renderNative();
-  $("#sheet-settings").classList.remove("hidden");
+  $("#s-accent-mode").value = cfg.get("accent_mode", "default"); markSwatch();
+  $("#s-fun").checked = cfg.get("fun", true); $("#s-talk").checked = cfg.get("talk", true); $("#s-sleep").value = String(cfg.get("sleep_min", 0)); $("#s-resume").checked = cfg.get("resume_on", true);
+  $("#s-lyrstyle").value = cfg.get("lyr_style", "karaoke"); $("#s-lyrsize").value = cfg.get("lyr_size", 20); $("#s-fps").value = String(cfg.get("fps", 60)); $("#s-sleepscr").checked = cfg.get("pause_bg", true);
+  updateStorageInfo();
+  fillVoices(); $("#s-vrate").value = Math.round(+cfg.get("voice_rate", 1) * 100); $("#s-vpitch").value = Math.round(+cfg.get("voice_pitch", 1.15) * 100);
+  renderNative();
+  $("#sheet-settings").classList.remove("hidden"); openLayer("settings");
 }
+function updateStorageInfo() {
+  const mb = b => b > 1e9 ? (b / 1e9).toFixed(2) + " GB" : Math.round(b / 1e6) + " MB", c = player.copiedBytes(), n = player.songs.length, ref = player.songs.filter(s => !s.blob).length;
+  $("#set-info").textContent = `${n} song${n === 1 ? "" : "s"} in Luna.`;
+  $("#set-copy").textContent = c ? `${mb(c)} of songs are copied inside the app. ${ref} play straight from your phone.` : `Nothing is copied. ${ref} songs play straight from your phone.`;
+  $("#set-slim").classList.toggle("hidden", !N.isNative || !c);
+}
+$("#set-slim").onclick = async () => {
+  toast("Looking at your phone's music..."); let list; try { list = await N.scanMusic(); } catch (e) { return toast("I need the music permission first."); }
+  const r = await player.slim(list); updateStorageInfo();
+  const left = player.songs.filter(s => s.blob).length;
+  luna(r.n ? `Done! ${r.n} songs no longer take space, about ${(r.freed / 1e9).toFixed(2)} GB. ${left ? left + " could not be matched and stay copied." : ""} Android may take a minute to show the freed space.` : "I couldn't match any copied songs to files on your phone.");
+};
+$("#set-hist").onclick = () => { if (!confirm("Clear recently played and most played?")) return; player.recent = []; player.stats = {}; kv.set("recent", []); kv.set("stats", {}); renderLib(); toast("History cleared"); };
 async function fillVoices() {
   const vs = await V.listVoices(), sel = $("#s-vname"), cur = cfg.get("voice_name", "");
   sel.innerHTML = `<option value="">Automatic (best available)</option>` + vs.map(v => `<option value="${esc(v.name)}">${esc(v.label)}</option>`).join(""); sel.value = cur;
@@ -480,14 +561,15 @@ $("#s-island").onchange = async e => { await N.setIsland(e.target.checked); push
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !$("#sheet-settings").classList.contains("hidden")) renderNative(); });
 $("#v-test").onclick = () => { saveVoice(); V.speak("Hi! This is how I sound. Do you like it?", { start: () => beh.speaking = true, end: () => beh.speaking = false, error: m => toast(m) }); };
 function saveVoice() {
-  cfg.set("voice_engine", $("#s-vengine").value); cfg.set("voice_name", $("#s-vname").value); cfg.set("voice_rate", $("#s-vrate").value / 100); cfg.set("voice_pitch", $("#s-vpitch").value / 100);
-  cfg.set("el_key", $("#s-elkey").value.trim()); cfg.set("el_voice", $("#s-elvoice").value.trim());
+  cfg.set("voice_name", $("#s-vname").value); cfg.set("voice_rate", $("#s-vrate").value / 100); cfg.set("voice_pitch", $("#s-vpitch").value / 100);
 }
 function closeSettings() {
   cfg.set("name", $("#s-name").value.trim()); const city = $("#s-city").value.trim(), oc = cfg.get("city", ""); cfg.set("city", city); cfg.set("hemi", $("#s-hemi").value); cfg.set("theme", themeSel.value);
   cfg.set("season_on", $("#s-season").checked); voiceOn = $("#s-voice").checked; cfg.set("voice", voiceOn);
   beh.bedtime = +$("#s-bed").value || 22; beh.wake = +$("#s-wake").value || 6; cfg.set("bedtime", beh.bedtime); cfg.set("wake", beh.wake); cfg.set("ai_key", $("#s-key").value.trim());
-  saveVoice(); applyLook(); $("#sheet-settings").classList.add("hidden"); if (city && city !== oc) fetchWeather(city, false);
+  cfg.set("fun", $("#s-fun").checked); cfg.set("talk", $("#s-talk").checked); cfg.set("resume_on", $("#s-resume").checked); cfg.set("lyr_style", $("#s-lyrstyle").value); cfg.set("lyr_size", +$("#s-lyrsize").value);
+  cfg.set("fps", +$("#s-fps").value); cfg.set("pause_bg", $("#s-sleepscr").checked); setSleepTimer(+$("#s-sleep").value); applyLyricsLook();
+  saveVoice(); applyLook(); applyAccent(); $("#sheet-settings").classList.add("hidden"); closeLayer("settings"); if (city && city !== oc) fetchWeather(city, false);
 }
 $("#btn-settings").onclick = openSettings; $("#set-close").onclick = closeSettings;
 $("#set-clear").onclick = async () => { if (!confirm("Remove every song from Luna on this phone? Your files stay where they are.")) return; player.stop(); await player.clear?.(); for (const s of [...player.songs]) await player.remove(s.id); toast("Library cleared"); $("#set-info").textContent = "0 songs saved on this phone."; };
@@ -521,7 +603,12 @@ function endDrag(e) {
 stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercancel", () => { beh.held = false; drag = null; });
 function furniture(x, y) {
   const now = nowS();
-  if (x > 3 && x < 34 && y > 55 && y < 93) return runCommand("game");
+  if (beh.pet && Math.abs(x - beh.pet.x) < 9 && y > 78 && y < 100) { beh.petTap(now); return luna(pick([`${beh.pet.name || "Your pet"} loves you!`, "Aww, so cute!", `${beh.pet.name || "Little one"} wants a snack too.`])); }
+  if (x > 35 && x < 65 && y > 36 && y < 93) return go("wardrobe");
+  if (x > 123 && x < 147 && y > 8 && y < 36) return luna(`Today is ${new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}. ${reminders.items.length ? "You have notes on the board!" : "Nothing planned. Want me to set a reminder?"}`);
+  if (x > 36 && x < 62 && y > 12 && y < 34) return luna(pick(["That's my favourite picture. Moonlight over the mountains.", "I painted it myself. Okay, I found it. It's still pretty!"]));
+  if (x > 60 && x < 72 && y < 20) return luna((new Date().getHours() >= 18 || new Date().getHours() < 6) ? "The lamp is on because it's evening. It switches off at 6 in the morning." : "The lamp is off, it's daytime. It turns on at 6 in the evening.");
+  if (x > 3 && x < 35 && y > 55 && y < 93) return runCommand("game");
   if (x > 146 && y > 66) return runCommand("laptop");
   if (x > 68 && x < 119 && y > 62 && y < 94) return runCommand("sleep");
   if (x > 117 && x < 138 && y > 76 && y < 94) return runCommand("snack");
@@ -543,7 +630,10 @@ const extActive = () => N.isNative && !player.playing && N.ext.has && N.ext.pkg 
 // ------------------------------------------------------------------ main loop
 let last = nowS(), frame = 0, remT = 0;
 function loop() {
-  const now = nowS(), dt = Math.min(0.1, now - last); last = now; frame++;
+  const now = nowS();
+  if (!N.active && cfg.get("pause_bg", true)) { if (now - remT > 1) { remT = now; checkReminders(); checkSleep(); } return setTimeout(loop, 700); }
+  const minDt = 1 / cfg.get("fps", 60) - 0.004; if (now - last < minDt) return requestAnimationFrame(loop);
+  const dt = Math.min(0.1, now - last); last = now; frame++;
   let audio = player.listen(now); beh.volume = player.volume;
   if (N.isNative && !player.playing) { const x = N.externalAudio(now); if (x) audio = x; }
   beh.update(now, dt, audio, null);
@@ -559,14 +649,74 @@ function loop() {
   }
   if (tab === "lyrics" && frame % 4 === 0) followLyrics();
   if (tab === "wardrobe" && frame % 20 === 0) drawPreview();
-  if (now - remT > 1) { remT = now; checkReminders(); }
+  if (now - remT > 1) { remT = now; checkReminders(); checkSleep(); easterEggs(now); }
   requestAnimationFrame(loop);
 }
 
+// ------------------------------------------------------------------ back button: go back one step instead of leaving the app
+let exitArmed = false;
+const buffer = () => { try { history.pushState({ luna: 1 }, ""); } catch (e) { } };
+try { history.replaceState({ luna: 0 }, ""); buffer(); } catch (e) { }
+window.addEventListener("popstate", () => {
+  if (layers.length) {
+    const n = layers.pop();
+    if (n === "settings") { closeSettings(); } else if (n === "now") $("#sheet-now").classList.add("hidden"); else if (n === "menu") $("#menu").classList.add("hidden"); else if (n === "sticker") $("#sticker-view") && $("#sticker-view").classList.add("hidden");
+    return buffer();
+  }
+  if (lib.detail && tab === "lib") { lib.detail = null; renderLib(); return buffer(); }
+  if (tabStack.length > 1) { tabStack.pop(); go(tabStack[tabStack.length - 1], true); return buffer(); }
+  if (!exitArmed) { exitArmed = true; toast("Press back again to close Luna"); setTimeout(() => { if (exitArmed) { exitArmed = false; buffer(); } }, 2200); }
+});
+
+// ---- rare surprises (easter eggs): she sings, gets tired, sends emojis and stickers. Always rare, and the switch in Settings turns them off.
+const LUNA_SONGS = [
+  ["La la la, music in my ears,", "dancing in my room for years,", "pink hair swinging, headphones on,", "play it again, don't skip the song!"],
+  ["Beep boop, I'm a music girl,", "watch me do a little twirl,", "snacks and tunes and cosy light,", "this is my kind of night!"],
+  ["Hum hum hum, a tiny tune,", "dancing under the pixel moon,", "one more song and one more still,", "I could do this all day, I will!"],
+];
+const MOOD_EMOJI = { hype: ["🔥", "🎉", "💃", "✨"], happy: ["😊", "🎶", "💖", "✨"], chill: ["😌", "🌙", "🍃", "☁️"], sad: ["🥺", "💧", "🫶"], idle: ["😊", "🎧", "💕", "🌸", "😋"], night: ["😴", "🌙", "💤"] };
+const STICKER_COUNT = 18;
+const egg = { t: { sing: 0, emoji: 0, sticker: 0 }, listen: 0, rest: 0, tired: false, singing: false };
+function logSticker(n) {
+  const d = document.createElement("div"); d.className = "msg luna sticker"; const i = new Image(); i.src = `stickers/${String(n).padStart(2, "0")}.webp`; i.alt = "A Luna sticker"; i.width = 130; i.height = 130; d.appendChild(i);
+  const l = $("#log"); l.appendChild(d); l.scrollTop = l.scrollHeight; while (l.children.length > 80) l.firstChild.remove();
+}
+function sendSticker(n = 1 + Math.floor(Math.random() * STICKER_COUNT)) { logSticker(n); beh.startEvent(pick(["wave", "laugh", "blush", "twirl"]), nowS()); say("*sends a sticker*", 3); }
+function sendEmoji() { const k = beh.isNight() ? "night" : (beh.mood in MOOD_EMOJI ? beh.mood : "idle"); const e = pick(MOOD_EMOJI[k]); logMsg("luna", e + (Math.random() < 0.4 ? " " + pick(MOOD_EMOJI[k]) : "")); say(e, 3); }
+function singSong(lines) {
+  if (egg.singing) return; egg.singing = true; lines = lines || pick(LUNA_SONGS); beh.setManual("sing", nowS());
+  lines.forEach((l, i) => setTimeout(() => { luna("♪ " + l + " ♪", { secs: 3.4 }); if (i === lines.length - 1) setTimeout(() => { beh.setManual("free", nowS()); egg.singing = false; }, 3600); }, i * 3600));
+}
+function easterEggs(now) {
+  const fun = cfg.get("fun", true), playing = player.playing && !player.audio.paused;
+  // tired: after a long listening session, or very late at night
+  if (playing) { egg.listen++; egg.rest = 0; } else egg.rest++;
+  if (egg.rest > 180) egg.listen = 0;
+  const lateNight = beh.isNight() && !beh.manual;
+  const tired = fun && (egg.listen > 45 * 60 || (new Date().getHours() === ((beh.bedtime + 23) % 24) && new Date().getMinutes() > 30));
+  if (tired && !egg.tired) { luna(pick(["*yawn* ...I'm getting a little sleepy.", "Hehe, my eyes keep closing... just one more song?", "*stretches* Long day of dancing!"]), { secs: 6 }); }
+  if (egg.tired && !tired) { luna("Okay, I feel awake again!"); }
+  egg.tired = tired; beh.tired = tired;
+  if (!fun || egg.singing || beh.manual === "bed" || lateNight) return;
+  const t = Date.now();
+  if (!playing && t - egg.t.sing > 12 * 60000 && Math.random() < 1 / 1500) { egg.t.sing = t; singSong(); }
+  else if (t - egg.t.emoji > 8 * 60000 && Math.random() < 1 / 900) { egg.t.emoji = t; sendEmoji(); }
+  else if (t - egg.t.sticker > 15 * 60000 && Math.random() < 1 / 1800) { egg.t.sticker = t; sendSticker(); }
+}
+// she knows songs you play a lot: sometimes she hums along when one starts
+player.addEventListener("songstart", e => {
+  if (!cfg.get("fun", true) || egg.singing) return; const s = e.detail, st = player.stats[s.id];
+  if (st && st.plays >= 5 && Math.random() < 0.12) setTimeout(() => singSong([`I know this one! ♪ ${s.title} ♪`, "la la la, la la la~"]), 2500);
+});
+// sleep timer
+let sleepAt = 0;
+function setSleepTimer(min) { cfg.set("sleep_min", min); sleepAt = min ? Date.now() + min * 60000 : 0; if (min) toast(`Sleep timer set for ${min} minutes`); }
+function checkSleep() { if (sleepAt && Date.now() >= sleepAt) { sleepAt = 0; cfg.set("sleep_min", 0); if (player.playing && !player.audio.paused) { player.pause(); luna("Sleep timer is done. Goodnight, sweet dreams!"); } } }
+
 // ------------------------------------------------------------------ start
 (async function init() {
-  applyLook(); pushArt(); go("room"); renderNotes(); refreshPlayerUI(); $("#now-vol").value = player.volume * 100;
-  await player.load(); player.restoreResume(); refreshPlayerUI();
+  applyLook(); applyAccent(); applyLyricsLook(); loadPetAndDecor(); pushArt(); go("room"); renderNotes(); refreshPlayerUI(); $("#now-vol").value = player.volume * 100;
+  await player.load(); if (cfg.get("resume_on", true)) player.restoreResume(); refreshPlayerUI();
   logMsg("luna", `Hi${cfg.get("name", "") ? " " + cfg.get("name", "") : ""}! I'm Luna. ${player.songs.length ? "Tap a song and I'll dance to it." : "Add some songs from your phone in the Library tab and I'll dance to them."} Type 'help' to see what I can do.`);
   if (N.isNative) {
     N.onControl(act => { if (act === "next") player.next(); else if (act === "prev") player.prev(); else if (act === "pause") player.pause(); else if (act === "play") player.resume(); else player.toggle(); });
